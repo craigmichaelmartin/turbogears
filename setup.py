@@ -29,7 +29,7 @@ install_requires = [
     "simplejson >= 1.3",
     "TurboCheetah >= 1.0",
     # TurboJson >= 1.2 uses PEAK-Rules
-    "TurboJson >= 1.1.4, < 1.2",
+    "TurboJson >= 1.3.2",
     "TurboKid >= 1.0.5",
 ]
 
