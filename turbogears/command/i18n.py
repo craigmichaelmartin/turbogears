@@ -345,7 +345,7 @@ for(var i in _messages) {
             fh = open(fname)
             try:
                 tree = kid.document(fh)
-            except Exception, e:
+            except Exception as e:
                 fh.close()
                 print 'Skip %s: %s' % (fname, e)
                 continue

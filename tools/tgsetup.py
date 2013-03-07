@@ -316,7 +316,7 @@ def use_setuptools(version=DEFAULT_VERSION, download_base=DEFAULT_URL,
         return do_download()
     try:
         pkg_resources.require("setuptools>="+version); return
-    except pkg_resources.VersionConflict, e:
+    except pkg_resources.VersionConflict as e:
         if was_imported:
             print >>sys.stderr, (
             "The required version of setuptools (>=%s) is not available, and\n"
@@ -394,7 +394,7 @@ def main(argv, version=DEFAULT_VERSION):
             finally:
                 if egg and os.path.exists(egg):
                     os.unlink(egg)
-    except Exception, e:
+    except Exception as e:
         print >>sys.stderr, (
         "Could not download and install setupools:\n%s\n"
         "Please try installing setuptools manually."

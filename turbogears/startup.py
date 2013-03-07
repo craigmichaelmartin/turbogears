@@ -61,7 +61,7 @@ every module. Setting an actual package makes the check much faster."""
                 filename = filename[:-1]
             try:
                 mtime = os.stat(filename).st_mtime
-            except OSError, e:
+            except OSError as e:
                 if orig_filename.endswith('.pyc') and e[0] == errno.ENOENT:
                     # This prevents us from endlessly restarting
                     # if there is an old .pyc lying around

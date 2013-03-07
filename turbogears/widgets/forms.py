@@ -912,7 +912,7 @@ class SelectionField(FormField):
         if not self.validator:
             try:
                 self.validator = self._guess_validator()
-            except Exception, err:
+            except Exception as err:
                 raise ValueError(
                     "No validator specified and couldn't guess one:\n%s\n"
                     "Please explicitly specify a validator for the %s."

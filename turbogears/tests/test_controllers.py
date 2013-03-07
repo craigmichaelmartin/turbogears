@@ -690,17 +690,17 @@ class TestURLs(unittest.TestCase):
         try:
             redirect("/foo")
             assert False, "redirect exception should have been raised"
-        except cherrypy.HTTPRedirect, e:
+        except cherrypy.HTTPRedirect as e:
             assert "http://localhost/coolsite/root/subthing/foo" in e.urls
         try:
             raise redirect("/foo")
             assert False, "redirect exception should have been raised"
-        except cherrypy.HTTPRedirect, e:
+        except cherrypy.HTTPRedirect as e:
             assert "http://localhost/coolsite/root/subthing/foo" in e.urls
         try:
             redirect("foo")
             assert False, "redirect exception should have been raised"
-        except cherrypy.HTTPRedirect, e:
+        except cherrypy.HTTPRedirect as e:
             assert "http://localhost/coolsite/root/subthing/foo" in e.urls
 
     def test_redirect_to_path(self):

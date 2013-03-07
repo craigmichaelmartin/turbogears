@@ -51,7 +51,7 @@ if os.path.exists('test.cfg'):
     # See http://trac.turbogears.org/ticket/2043
     try:
         update_config(configfile="test.cfg", modulename=modulename)
-    except ImportError, exc:
+    except ImportError as exc:
         import warnings
         warnings.warn("Could not import configuration from module: %s" % exc,
             RuntimeWarning)
@@ -253,7 +253,7 @@ def catch_validation_errors(widget, value):
     """Catch and unpack validation errors (for testing purposes)."""
     try:
         value = widget.validate(value)
-    except validators.Invalid, errors:
+    except validators.Invalid as errors:
         try:
             errors = errors.unpack_errors()
         except AttributeError:

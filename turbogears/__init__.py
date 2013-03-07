@@ -26,7 +26,7 @@ for entrypoint in extensions:
         extension = entrypoint.load()
         if hasattr(extension, "tgsymbols"):
             globals().update(extension.tgsymbols())
-    except Exception, exception:
+    except Exception as exception:
         warnings.warn("Could not load extension %s from %s: %s"
             % (entrypoint, entrypoint.dist, exception), stacklevel=2)
 

@@ -208,7 +208,7 @@ def require(predicate, obj=None):
                 if predicate is None or \
                    predicate.eval_with_object(current, errors):
                     return fn(self, *args, **kwargs)
-            except IdentityException, e:
+            except IdentityException as e:
                 errors = [str(e)]
             raise IdentityFailure(errors)
         fn._require = predicate
@@ -251,7 +251,7 @@ class SecureResource(object):
                 return SecureObject(value, predicate)
             # Some other property
             return value
-        except IdentityException, e:
+        except IdentityException as e:
             errors= [str(e)]
         raise IdentityFailure(errors)
 
@@ -281,6 +281,6 @@ class SecureObject(object):
                 return SecureObject(value, predicate)
             # Some other property
             return value
-        except IdentityException, e:
+        except IdentityException as e:
             errors = [str(e)]
         raise IdentityFailure(errors)

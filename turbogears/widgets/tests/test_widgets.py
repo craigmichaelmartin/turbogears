@@ -34,7 +34,7 @@ def test_rendering_without_engine():
     view.engines = {}
     try:
         widgets.CSSLink("foo")()
-    except Exception, msg:
+    except Exception as msg:
         msg = str(msg)
     else:
         msg = 'No error'
@@ -103,7 +103,7 @@ def test_unicode_input():
     return # XXX: the folowing causes OTHER(!) tests to fail!
     try:
         print tf.render('Pete \xfe\xcd')
-    except ValueError, e:
+    except ValueError as e:
         pass
     else:
         assert False, "ValueError not raised: non-unicode input not detected"

@@ -289,7 +289,7 @@ class Designer(controllers.RootController):
         tmp_model_path = model_path.replace('model.py','%s.py' % tmp_name)
         try:
             shutil.copy(model_path, tmp_model_path)
-        except IOError, e:
+        except IOError as e:
             return dict(status='Failed to create a temporary model file: %s' % e)
 
         model = self.get_model_name()
@@ -306,7 +306,7 @@ class Designer(controllers.RootController):
                 obj.createTable(ifNotExists=True)
                 setattr(model, class_name, obj)
                 ok.append('Table created for class %s' % class_name)
-            except Exception, e:
+            except Exception as e:
                 fail.append('Failed to create table for class %s: %s'
                     % (class_name,e))
 
@@ -317,7 +317,7 @@ class Designer(controllers.RootController):
 
         try:
             os.remove(tmp_model_path)
-        except IOError, e:
+        except IOError as e:
             print "Fail to remove temporary model file: %s" % e
 
         return dict(status=status)

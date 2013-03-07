@@ -164,7 +164,7 @@ def validate(form=None, validators=None,
                 value = kw.copy()
                 try:
                     kw.update(form.validate(value, state))
-                except Invalid, e:
+                except Invalid as e:
                     errors = e.unpack_errors()
                     request.validation_exception = e
                 request.validated_form = form
@@ -175,13 +175,13 @@ def validate(form=None, validators=None,
                         try:
                             kw[field] = validator.to_python(
                                 kw.get(field, None), state)
-                        except Invalid, error:
+                        except Invalid as error:
                             errors[field] = error
                 else:
                     try:
                         value = kw.copy()
                         kw.update(validators.to_python(value, state))
-                    except Invalid, e:
+                    except Invalid as e:
                         errors = e.unpack_errors()
                         request.validation_exception = e
             request.validation_errors = errors

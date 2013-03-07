@@ -65,7 +65,7 @@ def load_widgets():
     for widget_mod in pkg_resources.iter_entry_points("turbogears.widgets"):
         try:
             widget_mod.load()
-        except Exception, e:
+        except Exception as e:
             raise ImportError, 'Error loading plugin "%s"\n%s: %s' % (
                 widget_mod, e.__class__.__name__, e)
 

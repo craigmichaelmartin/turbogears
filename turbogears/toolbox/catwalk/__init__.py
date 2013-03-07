@@ -132,7 +132,7 @@ class CatWalk(turbogears.controllers.Controller):
                 self._connection = model.hub
             except Exception:
                 self._connection = sqlobject.sqlhub
-        except Exception, e:
+        except Exception as e:
             raise ImportError, (
                 "CatWalk failed to load your model file.\n" + str(e))
         self.browse.catwalk = self
@@ -366,7 +366,7 @@ class CatWalk(turbogears.controllers.Controller):
             total = query.count()
             results = query[start:start+page_size]
             headers, rows = self.headers_and_rows(object_name, list(results))
-        except Exception, e:
+        except Exception as e:
             msg = 'Fail to load object instance: %s' % e
             raise cherrypy.HTTPRedirect(turbogears.url('error', msg=msg))
         return dict(objectName=object_name,
@@ -616,7 +616,7 @@ class CatWalk(turbogears.controllers.Controller):
         if not os.path.exists(catwalk_session_dir):
             try:
                 os.mkdir(catwalk_session_dir)
-            except IOError, e:
+            except IOError as e:
                 msg = 'Fail to create session directory %s' % e
                 raise cherrypy.HTTPRedirect(turbogears.url('error', msg=msg))
         return os.path.join(catwalk_session_dir, 'session.pkl')
@@ -627,7 +627,7 @@ class CatWalk(turbogears.controllers.Controller):
             return {}
         try:
             return pickle.load(open(self.state_path(),'rb'))
-        except pickle.PicklingError, e:
+        except pickle.PicklingError as e:
             msg = 'Fail to load pickled session file %s' % e
             raise cherrypy.HTTPRedirect(turbogears.url('error', msg=msg))
 
@@ -635,7 +635,7 @@ class CatWalk(turbogears.controllers.Controller):
         """Pickle the state."""
         try:
             pickle.dump(state, open(self.state_path(), 'wb'), True)
-        except pickle.PicklingError, e:
+        except pickle.PicklingError as e:
             msg = 'Fail to store pickled session file %s' % e
             raise cherrypy.HTTPRedirect(turbogears.url('error', msg=msg))
 
@@ -808,7 +808,7 @@ class CatWalk(turbogears.controllers.Controller):
             return self.instances(objectName)
         try:
             new_object = obj(**params)
-        except Exception, e:
+        except Exception as e:
             cherrypy.response.status = 500
             return dict(error=str(e))
         if not new_object:
@@ -829,7 +829,7 @@ class CatWalk(turbogears.controllers.Controller):
         id = values.get('id', '')
         try:
             self.update_object(object_name, id, values)
-        except Exception, e:
+        except Exception as e:
             cherrypy.response.status = 500
             return dict(error=str(e))
         returnlist = self.object_instances(object_name)
@@ -850,7 +850,7 @@ class CatWalk(turbogears.controllers.Controller):
         """
         try:
             self.remove_object(objectName, id)
-        except Exception, e:
+        except Exception as e:
             cherrypy.response.status = 500
             return dict(error=str(e))
         returnlist = self.object_instances(objectName)
@@ -978,7 +978,7 @@ class CatWalk(turbogears.controllers.Controller):
                     continue
                 instance = join_object.get(i)
                 add_method(instance)
-        except Exception, e:
+        except Exception as e:
             cherrypy.response.status = 500
             return dict(error=str(e))
         returnlist = self.object_instance(objectName, id)

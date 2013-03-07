@@ -107,7 +107,7 @@ def setup_module():
     try:
         metadata.create_all()
         fresh_metadata.create_all()
-    except Exception, error:
+    except Exception as error:
         # workaround for a problem with PySqlite < 2.6 and SQLAlchemy < 0.5
         if 'Cannot operate on a closed cursor' in str(error):
             metadata.create_all(checkfirst=False)
