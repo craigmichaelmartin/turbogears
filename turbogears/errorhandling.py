@@ -75,7 +75,7 @@ def try_call(func, self, *args, **kw):
     from turbogears.database import restart_transaction
     try:
         return func(self, *args, **kw)
-    except Exception as e:
+    except Exception, e:
         if isinstance(e, cherrypy.HTTPRedirect) or \
                 call_on_stack("dispatch_error",
                     {"tg_source": func, "tg_exception": e}, 4):

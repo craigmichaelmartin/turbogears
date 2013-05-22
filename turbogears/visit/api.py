@@ -242,7 +242,7 @@ class VisitFilter(BaseFilter):
         try:
             for plugin in _plugins:
                 plugin.record_request(visit)
-        except cherrypy.InternalRedirect as e:
+        except cherrypy.InternalRedirect, e:
             # Can't allow an InternalRedirect here because CherryPy is dumb,
             # instead change cherrypy.request.object_path to the url desired.
             cherrypy.request.object_path = e.path

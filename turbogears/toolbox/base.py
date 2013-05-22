@@ -123,7 +123,7 @@ class Toolbox(controllers.RootController):
             if project_name or not getattr(tool, 'need_project', False):
                 try:
                     setattr(self, i.name, tool())
-                except Exception as e:
+                except Exception, e:
                     args["description"] = str(e) or 'Tool could not be loaded.'
                     args["disabled"] = 'disabled'
             else:

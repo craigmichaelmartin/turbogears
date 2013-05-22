@@ -732,7 +732,7 @@ def create_tables():
 
     try:
         metadata.create_all()
-    except Exception as error:
+    except Exception, error:
         # workaround for a problem with PySqlite < 2.6 and SQLAlchemy < 0.5
         if 'Cannot operate on a closed cursor' in str(error):
             metadata.create_all(checkfirst=False)

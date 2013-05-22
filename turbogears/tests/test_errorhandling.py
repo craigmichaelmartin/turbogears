@@ -90,7 +90,7 @@ class MyRoot(RootController):
     def infiniteloop(self):
         try:
             self.exceptionerror2()
-        except Exception as e:
+        except Exception, e:
             return dict(title=str(e))
         else:
             return dict(title="Infinite loop provider")

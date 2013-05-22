@@ -41,15 +41,15 @@ def _get_handlers(handlers, formatters):
             except NameError:
                 try:
                     cls = eval(cls, logging.handlers.__dict__)
-                except NameError as err:
+                except NameError, err:
                     raise ConfigError("Specified class in handler "
                         "%s is not a recognizable logger name" % key)
             try:
                 handler_obj = cls(*eval(args, logging.__dict__))
-            except IOError as err:
+            except IOError,err:
                 raise ConfigError("Missing or wrong argument to "
                     "%s in handler %s -> %s " % (cls.__name__,key,err))
-            except TypeError as err:
+            except TypeError,err:
                 raise ConfigError("Wrong format for arguments "
                     "to %s in handler %s -> %s" % (cls.__name__,key,err))
             if level:

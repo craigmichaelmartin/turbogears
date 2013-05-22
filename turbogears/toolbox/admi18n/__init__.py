@@ -57,7 +57,7 @@ class Internationalization(controllers.RootController):
             path = os.path.join(locales, c)
             try:
                 shutil.rmtree(path)
-            except OSError as e:
+            except OSError,e:
                 print e
                 return
 
@@ -89,14 +89,14 @@ class Internationalization(controllers.RootController):
         path = os.path.join(locales, code)
         try:
             os.mkdir(path)
-        except OSError as e:
+        except OSError, e:
             print e
             return
 
         path = os.path.join(path, 'LC_MESSAGES')
         try:
             os.mkdir(path)
-        except OSError as e:
+        except OSError, e:
             print e
             return
 
@@ -183,7 +183,7 @@ class Internationalization(controllers.RootController):
         if not os.path.isdir(locales_dir):
             try:
                 os.mkdir(locales_dir)
-            except OSError as e:
+            except OSError, e:
                 print e
                 return
         return locales_dir
@@ -284,7 +284,7 @@ class Internationalization(controllers.RootController):
         filename = os.path.join(locales, 'messages.pot')
         try:
             os.rename(pot, filename)
-        except OSError as e:
+        except OSError, e:
             print e
 
     def pot_message_file(self):

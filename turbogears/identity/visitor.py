@@ -179,7 +179,7 @@ class IdentityVisitPlugin(object):
 
         try:
             identity = self.identity_from_request(visit.key)
-        except IdentityException as e:
+        except IdentityException, e:
             log.exception("Caught exception while getting identity from request")
             errors = [str(e)]
             raise IdentityFailure(errors)

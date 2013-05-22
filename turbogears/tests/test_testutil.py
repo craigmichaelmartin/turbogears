@@ -69,7 +69,7 @@ class TestControllers(unittest.TestCase):
         try:
             testutil.call(self.root.redirect)
             self.fail("no redirect exception raised")
-        except cherrypy.HTTPRedirect as e:
+        except cherrypy.HTTPRedirect, e:
             assert e.status in [302, 303]
             self.assertEquals(1, len(e.urls))
             assert e.urls[0].endswith("foo")

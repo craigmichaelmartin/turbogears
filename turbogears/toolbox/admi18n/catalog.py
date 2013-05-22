@@ -213,7 +213,7 @@ def parse(infile):
         # XXX: Does this always follow Python escape semantics?
         try:
             l = eval(l)
-        except Exception as e:
+        except Exception, e:
             print >> sys.stderr, 'Escape error on %s: %d' % (infile, lno), \
                 'before:', repr(l)
             raise ParseError(e)
