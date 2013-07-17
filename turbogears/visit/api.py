@@ -17,6 +17,9 @@ import pkg_resources
 from cherrypy.filters.basefilter import BaseFilter
 from turbogears import config
 
+from psycopg2.extensions import TransactionRollbackError
+import traceback
+
 log = logging.getLogger("turbogears.visit")
 
 # Global VisitManager
@@ -349,5 +352,14 @@ class BaseVisitManager(threading.Thread):
             finally:
                 self.lock.release()
             if queue is not None:
-                self.update_queued_visits(queue)
+                try:
+                    self.update_queued_visits(queue)
+                except TransactionRollbackError:
+                    traceback.print_exc()
+                    try:
+                        self.lock.acquire()
+                        self.queue.update(queue)
+                    finally:
+                        self.lock.release()
+
             self._shutdown.wait(self.interval)
