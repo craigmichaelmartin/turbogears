@@ -24,6 +24,8 @@ except NameError:  # Python 2.3
 
 
 def to_db_encoding(s, encoding):
+    if encoding is None:
+        encoding = 'UTF-8'
     if isinstance(s, str):
         pass
     elif hasattr(s, '__unicode__'):
