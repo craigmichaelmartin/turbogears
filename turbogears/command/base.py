@@ -197,12 +197,12 @@ class Shell(CommandWithDB):
 
         try:
             # try to use IPython if possible
-            import IPython
+            from IPython.terminal.interactiveshell import TerminalInteractiveShell
 
-            class CustomIPShell(IPython.iplib.InteractiveShell):
+            class CustomIPShell(TerminalInteractiveShell):
                 def raw_input(self, *args, **kw):
                     try:
-                        return IPython.iplib.InteractiveShell.raw_input(self,
+                        return TerminalInteractiveShell.raw_input(self,
                             *args, **kw) # needs decoding (see below)?
                     except EOFError:
                         r = raw_input("Do you wish to commit your "
@@ -214,8 +214,7 @@ class Shell(CommandWithDB):
                                 self.push("hub.commit()")
                         raise EOFError
 
-            shell = IPython.Shell.IPShell(user_ns=locals,
-                                          shell_class=CustomIPShell)
+            shell = CustomIPShell(user_ns=locals)
             shell.mainloop()
         except ImportError:
             import code
