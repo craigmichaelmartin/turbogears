@@ -275,7 +275,7 @@ class SqlObjectIdentityProvider(object):
         subclass SqlObjectIdentityProvider, and override this method.
 
         """
-        return user.check_password(password)
+        return user.password == self.encrypt_password(password)
 
     def load_identity(self, visit_key):
         """Lookup the principal represented by user_name.
