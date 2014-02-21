@@ -414,10 +414,7 @@ def sa_rwt(func, *args, **kw):
             # If a redirect happens, commit and proceed with redirect
             if sa_transaction_active():
                 log.debug('Redirect in active transaction - will commit now')
-                if hasattr(session, 'commit'):
-                    session.commit()
-                else: # SA < 0.4
-                    request.sa_transaction.commit()
+                session.commit()
             else:
                 log.debug('Redirect in inactive transaction')
             raise
@@ -425,20 +422,14 @@ def sa_rwt(func, *args, **kw):
             # If any other exception happens, rollback and re-raise error
             if sa_transaction_active():
                 log.debug('Error in active transaction - will rollback now')
-                if hasattr(session, 'rollback'):
-                    session.rollback()
-                else: # SA < 0.4
-                    request.sa_transaction.rollback()
+                session.rollback()
             else:
                 log.debug('Error in inactive transaction')
             raise
         # If the call was successful, commit and proceed
         if sa_transaction_active():
             log.debug('Transaction is still active - will commit now')
-            try:
-                session.commit()
-            except AttributeError: # SA < 0.4
-                request.sa_transaction.commit()
+            session.commit()
         else:
             log.debug('Transaction is already inactive')
     finally:
@@ -452,10 +443,7 @@ def sa_restart_transaction(args):
     log.debug("Restarting SA transaction")
     if sa_transaction_active():
         log.debug('Transaction is still active - will rollback now')
-        try:
-            session.rollback()
-        except AttributeError: # SA < 0.4
-            request.sa_transaction.rollback()
+        session.rollback()
     else:
         log.debug('Transaction is already inactive')
     session.close()
@@ -463,27 +451,11 @@ def sa_restart_transaction(args):
 
 def make_sa_transaction(session):
     """Create a new transaction in an SA session."""
-    try:
-        return session.begin()
-    except AttributeError: # SA < 0.4
-        return session.create_transaction()
+    return session.begin(subtransactions=True)
 
 def sa_transaction_active():
     """Check whether SA transaction is still active."""
-    try:
-        return session.is_active
-    except AttributeError: # SA < 0.4.9
-        try:
-            return session().is_active
-        except (TypeError, AttributeError): # SA < 0.4.7
-            try:
-                transaction = request.sa_transaction
-            except AttributeError:
-                return False
-            try:
-                return transaction and transaction.is_active
-            except AttributeError: # SA < 0.4.3
-                return transaction.session.transaction
+    return session.is_active
 
 def so_to_dict(sqlobj):
     """Convert SQLObject to a dictionary based on columns."""
@@ -528,10 +500,7 @@ def so_joins(sqlclass, joins=None):
 class EndTransactionsFilter(BaseFilter):
     def on_end_resource(self):
         if _use_sa():
-            try:
-                session.expunge_all()
-            except AttributeError: # SQLAlchemy < 0.5.1
-                session.clear()
+            session.expunge_all()
         end_all()
 
 __all__ = ["get_engine", "metadata", "session", "mapper",
