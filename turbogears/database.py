@@ -464,7 +464,7 @@ def sa_restart_transaction(args):
 def make_sa_transaction(session):
     """Create a new transaction in an SA session."""
     try:
-        return session.begin()
+        return session
     except AttributeError: # SA < 0.4
         return session.create_transaction()
 
