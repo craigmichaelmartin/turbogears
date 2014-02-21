@@ -56,11 +56,12 @@ if sqlalchemy:
 
     metadata = sqlalchemy.MetaData()
     try:
-        from sqlalchemy.orm import scoped_session
+        from sqlalchemy.orm import scoped_session, mapper, sessionmaker
+        session_factory = sessionmaker(bind=_engine)
         # Create session with autoflush=False
         # and autocommit=True (transactional=False)
-        session = scoped_session(create_session)
-        mapper = session.mapper # use session-aware mapper
+        session = scoped_session(session_factory)
+        #mapper = session.mapper # use session-aware mapper
     except ImportError: # SQLAlchemy < 0.4
         from sqlalchemy.ext.sessioncontext import SessionContext
         class Objectstore(object):
