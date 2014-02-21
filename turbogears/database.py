@@ -1,16 +1,26 @@
 """Convenient access to an SQLObject or SQLAlchemy managed database."""
 
+__all__ = ['AutoConnectHub', 'bind_metadata', 'create_session',
+    'create_session_mapper', 'commit_all', 'end_all',
+    'DatabaseError', 'DatabaseConfigurationError',
+    'EndTransactions', 'get_engine', 'get_metadata', 'mapper',
+    'metadata', 'PackageHub', 'rollback_all', 'session',
+    'session_mapper', 'set_db_uri', 'so_columns', 'so_joins', 'so_to_dict']
+
 import sys
 import time
 import logging
 
 import cherrypy
 from cherrypy import request
-from cherrypy.filters.basefilter import BaseFilter
 
 try:
-    import sqlalchemy
-    from sqlalchemy.orm import create_session as orm_create_session
+    import sqlalchemy, sqlalchemy.orm
+    from sqlalchemy import MetaData
+    try:
+        from sqlalchemy.exc import ArgumentError, OperationalError
+    except ImportError: # SQLAlchemy < 0.5
+        from sqlalchemy.exceptions import ArgumentError, OperationalError
 except ImportError:
     sqlalchemy = None
 
@@ -21,82 +31,129 @@ try:
 except ImportError:
     sqlobject = None
 
-import dispatch
+from peak.rules import abstract, when, NoApplicableMethods
+
 from turbogears import config
 from turbogears.util import remove_keys
-from turbogears.genericfunctions import MultiorderGenericFunction
 
-log = logging.getLogger("turbogears.database")
+log = logging.getLogger('turbogears.database')
 
-_engine = None
+
+class DatabaseError(Exception):
+    """TurboGears Database Error."""
+
+
+class DatabaseConfigurationError(DatabaseError):
+    """TurboGears Database Configuration Error."""
+
 
 # Provide support for SQLAlchemy
 if sqlalchemy:
-    def get_engine():
+
+    def get_engine(pkg=None):
         """Retrieve the engine based on the current configuration."""
-        global _engine
-        if not _engine:
-            alch_args = dict()
-            for k, v in config.config.configMap["global"].items():
-                if "sqlalchemy" in k:
-                    alch_args[k.split(".")[-1]] = v
+        bind_metadata()
+        return get_metadata(pkg).bind
+
+    def get_metadata(pkg=None):
+        """Retrieve the metadata for the specified package."""
+        try:
+            return _metadatas[pkg]
+        except KeyError:
+            _metadatas[pkg] = MetaData()
+            return _metadatas[pkg]
+
+    def bind_metadata():
+        """Connect SQLAlchemy to the configured database(s)."""
+        if metadata.is_bound():
+            return
+
+        alch_args = dict()
+        for k, v in config.items():
+            if 'sqlalchemy' in k:
+                alch_args[k.split('.', 1)[-1]] = v
+
+        try:
             dburi = alch_args.pop('dburi')
             if not dburi:
-                raise KeyError("No sqlalchemy database config found!")
-            _engine = sqlalchemy.create_engine(dburi, **alch_args)
-        if not metadata.is_bound():
-            metadata.bind = _engine
-        return _engine
+                raise KeyError
+            metadata.bind = sqlalchemy.create_engine(dburi, **alch_args)
+        except KeyError:
+            raise DatabaseConfigurationError(
+                "No sqlalchemy database configuration found!")
+        except ArgumentError, exc:
+            raise DatabaseConfigurationError(exc)
+
+        global _using_sa
+        _using_sa = True
+
+        for k, v in config.items():
+            if '.dburi' in k and 'sqlalchemy.' not in k:
+                get_metadata(k.split('.', 1)[0]
+                    ).bind = sqlalchemy.create_engine(v, **alch_args)
 
     def create_session():
-        """Create a session that uses the engine from thread-local metadata."""
+        """Create a session that uses the engine from thread-local metadata.
+
+        The session by default does not begin a transaction, and requires that
+        flush() be called explicitly in order to persist results to the database.
+
+        """
         if not metadata.is_bound():
-            get_engine()
-        return orm_create_session()
+            bind_metadata()
+        return sqlalchemy.orm.create_session()
 
-    metadata = sqlalchemy.MetaData()
-    try:
-        from sqlalchemy.orm import scoped_session, mapper, sessionmaker
-        session_factory = sessionmaker(bind=_engine)
-        # Create session with autoflush=False
-        # and autocommit=True (transactional=False)
-        session = scoped_session(session_factory)
-        #mapper = session.mapper # use session-aware mapper
-    except ImportError: # SQLAlchemy < 0.4
-        from sqlalchemy.ext.sessioncontext import SessionContext
-        class Objectstore(object):
-            def __init__(self):
-                self.context = SessionContext(create_session)
-            def __getattr__(self, name):
-                return getattr(self.context.registry(), name)
-            session = property(lambda s: s.context.registry())
-        session = Objectstore()
-        context = session.context
-        Query = sqlalchemy.Query
-        from sqlalchemy.orm import mapper as orm_mapper
-        def mapper(cls, *args, **kwargs):
-            validate = kwargs.pop('validate', False)
-            if not hasattr(getattr(cls, '__init__'), 'im_func'):
+    session = sqlalchemy.orm.scoped_session(create_session)
+
+    if not hasattr(session, 'add'): # SQLAlchemy < 0.5
+        session.add = session.save_or_update
+
+    # Note: TurboGears used to set mapper = Session.mapper, but this has
+    # been deprecated in SQLAlchemy 0.5.5. If it is unavailable, we emulate
+    # the behaviour of the old session-aware mapper following this recipe
+    # from the SQLAlchemy wiki:
+    #
+    # http://www.sqlalchemy.org/trac/wiki/UsageRecipes/SessionAwareMapper
+    #
+    # If you do not want to use the session-aware mapper, import 'mapper'
+    # directly from sqlalchemy.orm. See model.py in the default quickstart
+    # template for an example.
+    def create_session_mapper(scoped_session=session):
+        def mapper(cls, *args, **kw):
+            set_kwargs_on_init = kw.pop('set_kwargs_on_init', True)
+            validate = kw.pop('validate', False)
+            # we accept 'save_on_init' as an alias for 'autoadd' for backward
+            # compatibility, but 'autoadd' is shorter and more to the point.
+            autoadd = kw.pop('autoadd', kw.pop('save_on_init', True))
+
+            if set_kwargs_on_init and (getattr(cls,
+                        '__init__', object.__init__) is object.__init__
+                    or getattr(cls.__init__, '_session_mapper', False)):
                 def __init__(self, **kwargs):
-                     for key, value in kwargs.items():
-                         if validate and key not in self.mapper.props:
-                             raise KeyError(
-                                "Property does not exist: '%s'" % key)
-                         setattr(self, key, value)
+                    for key, value in kwargs.items():
+                        if validate:
+                            if not hasattr(self, key):
+                                raise TypeError(
+                                    "Invalid __init__ argument: '%s'" % key)
+                        setattr(self, key, value)
+                    if autoadd:
+                        session.add(self)
+                __init__._session_mapper = True
                 cls.__init__ = __init__
-            m = orm_mapper(cls, extension=context.mapper_extension,
-                *args, **kwargs)
-            class query_property(object):
-                def __get__(self, instance, cls):
-                    return Query(cls, session=context.current)
-            cls.query = query_property()
-            return m
+            cls.query = scoped_session.query_property()
+            return sqlalchemy.orm.mapper(cls, *args, **kw)
+        return mapper
+    session_mapper = create_session_mapper()
+    if hasattr(session, 'mapper'):
+        # Old session-aware mapper
+        mapper = session.mapper
+    else:
+        mapper = session_mapper
 
-    try:
-        from sqlalchemy.ext import activemapper
-        activemapper.metadata, activemapper.objectstore = metadata, session
-    except ImportError:
-        pass
+    _metadatas = {}
+    _metadatas[None] = MetaData()
+    metadata = _metadatas[None]
+
     try:
         import elixir
         elixir.metadata, elixir.session = metadata, session
@@ -106,18 +163,15 @@ if sqlalchemy:
 else:
     def get_engine():
         pass
-
+    def get_metadata():
+        pass
+    def bind_metadata():
+        pass
     def create_session():
         pass
+    session = metadata = mapper = None
 
-    metadata = session = mapper = None
-
-bind_meta_data = bind_metadata = get_engine # alias names
-
-try:
-    set
-except NameError: # Python 2.3
-    from sets import Set as set
+bind_meta_data = bind_metadata # deprecated, for backward compatibility
 
 hub_registry = set()
 
@@ -126,10 +180,14 @@ _hubs = dict() # stores the AutoConnectHubs used for each connection URI
 # Provide support for SQLObject
 if sqlobject:
     def _mysql_timestamp_converter(raw):
-        """Convert a MySQL TIMESTAMP to a floating point number representing
+        """Timestamp-converter for MySQL.
+
+        Convert a MySQL TIMESTAMP to a floating point number representing
         the seconds since the Un*x Epoch. It uses custom code the input seems
         to be the new (MySQL 4.1+) timestamp format, otherwise code from the
-        MySQLdb module is used."""
+        MySQLdb module is used.
+
+        """
         if raw[4] == '-':
             return time.mktime(time.strptime(raw, '%Y-%m-%d %H:%M:%S'))
         else:
@@ -138,14 +196,18 @@ if sqlobject:
 
 
     class AutoConnectHub(ConnectionHub):
-        """Connects to the database once per thread. The AutoConnectHub also
-        provides convenient methods for managing transactions."""
+        """Connect to the database once per thread.
+
+        The AutoConnectHub also provides convenient methods for managing
+        transactions.
+
+        """
         uri = None
         params = {}
 
         def __init__(self, uri=None, supports_transactions=True):
             if not uri:
-                uri = config.get("sqlobject.dburi")
+                uri = config.get('sqlobject.dburi')
             self.uri = uri
             self.supports_transactions = supports_transactions
             hub_registry.add(self)
@@ -158,12 +220,16 @@ if sqlobject:
             major = module_version[0]
             minor = module_version[1]
             # we can't use Decimal here because it is only available for Python 2.4
-            return (major < 1 or (major == 1 and minor < 2))
+            return major < 1 or (major == 1 and minor < 2)
 
         def _enable_timestamp_workaround(self, connection):
-            """Enable a workaround for an incompatible timestamp format change
+            """Enable timestamp-workaround for MySQL.
+
+            Enable a workaround for an incompatible timestamp format change
             in MySQL 4.1 when using an old version of MySQLdb. See trac ticket
-            #1235 - http://trac.turbogears.org/ticket/1235 for details."""
+            #1235 - http://trac.turbogears.org/ticket/1235 for details.
+
+            """
             # precondition: connection is a MySQLConnection
             import MySQLdb
             import MySQLdb.converters
@@ -172,34 +238,37 @@ if sqlobject:
                 conversions[MySQLdb.constants.FIELD_TYPE.TIMESTAMP] = \
                     _mysql_timestamp_converter
                 # There is no method to use custom keywords when using
-                # "connectionForURI" in sqlobject so we have to insert the
+                # "connectionForURI" in SQLObject so we have to insert the
                 # conversions afterwards.
-                connection.kw["conv"] = conversions
+                connection.kw['conv'] = conversions
 
         def getConnection(self):
             try:
                 conn = self.threadingLocal.connection
                 return self.begin(conn)
             except AttributeError:
-                if self.uri:
-                    conn = sqlobject.connectionForURI(self.uri)
+                uri = self.uri
+                if uri:
+                    conn = sqlobject.connectionForURI(uri)
                     # the following line effectively turns off the DBAPI connection
                     # cache. We're already holding on to a connection per thread,
-                    # and the cache causes problems with sqlite.
-                    if self.uri.startswith("sqlite"):
+                    # and the cache causes problems with SQLite.
+                    if uri.startswith('sqlite'):
                         TheURIOpener.cachedURIs = {}
-                    elif self.uri.startswith("mysql") and \
-                         config.get("turbogears.enable_mysql41_timestamp_workaround", False):
+                    elif uri.startswith('mysql') and config.get('turbogears.'
+                            'enable_mysql41_timestamp_workaround', False):
                         self._enable_timestamp_workaround(conn)
                     self.threadingLocal.connection = conn
                     return self.begin(conn)
-                raise AttributeError(
-                    "No connection has been defined for this thread "
-                    "or process")
+                raise AttributeError("No connection has been defined"
+                    " for this thread or process")
 
         def reset(self):
-            """Used for testing purposes. This drops all of the connections
-            that are being held."""
+            """Used for testing purposes.
+
+            This drops all of the connections that are being held.
+
+            """
             self.threadingLocal = threading_local()
 
         def begin(self, conn=None):
@@ -253,17 +322,20 @@ if sqlobject:
                 conn.rollback()
             self.threadingLocal.connection = self.threadingLocal.old_conn
             del self.threadingLocal.old_conn
-            self.threadingLocal.connection.cache.clear()
+            self.threadingLocal.connection.expireAll()
 
     class PackageHub(object):
-        """Transparently proxies to an AutoConnectHub for the URI
+        """A package specific database hub.
+
+        Transparently proxies to an AutoConnectHub for the URI
         that is appropriate for this package. A package URI is
-        configured via "packagename.dburi" in the global CherryPy
+        configured via "packagename.dburi" in the TurboGears config
         settings. If there is no package DB URI configured, the
         default (provided by "sqlobject.dburi") is used.
 
         The hub is not instantiated until an attempt is made to
         use the database.
+
         """
         def __init__(self, packagename):
             self.packagename = packagename
@@ -289,12 +361,13 @@ if sqlobject:
                 return getattr(self.hub.getConnection(), name)
 
         def set_hub(self):
-            dburi = config.get("%s.dburi" % self.packagename, None)
+            dburi = config.get('%s.dburi' % self.packagename, None)
             if not dburi:
-                dburi = config.get("sqlobject.dburi", None)
+                dburi = config.get('sqlobject.dburi', None)
             if not dburi:
-                raise KeyError, "No database configuration found!"
-            if dburi.startswith("notrans_"):
+                raise DatabaseConfigurationError(
+                    "No sqlobject database configuration found!")
+            if dburi.startswith('notrans_'):
                 dburi = dburi[8:]
                 trans = False
             else:
@@ -311,52 +384,59 @@ else:
     class PackageHub(object):
         pass
 
+
 def set_db_uri(dburi, package=None):
-    """Sets the database URI to use either globally or for a specific
-    package. Note that once the database is accessed, calling
-    setDBUri will have no effect.
+    """Set the database URI.
+
+    Sets the database URI to use either globally or for a specific package.
+    Note that once the database is accessed, calling it will have no effect.
 
     @param dburi: database URI to use
     @param package: package name this applies to, or None to set the default.
+
     """
     if package:
-        config.update({'global':
-            {"%s.dburi" % package : dburi}
-        })
+        config.update({'%s.dburi' % package: dburi})
     else:
-        config.update({'global':
-            {"sqlobject.dburi" : dburi}
-        })
+        config.update({'sqlobject.dburi': dburi})
+
 
 def commit_all():
-    """Commits the transactions in all registered hubs (for this thread)."""
+    """Commit the transactions in all registered hubs (for this thread)."""
     for hub in hub_registry:
         hub.commit()
+
 
 def rollback_all():
     """Rollback the transactions in all registered hubs (for this thread)."""
     for hub in hub_registry:
         hub.rollback()
 
+
 def end_all():
     """End the transactions in all registered hubs (for this thread)."""
     for hub in hub_registry:
         hub.end()
 
-[dispatch.generic(MultiorderGenericFunction)]
+
+@abstract()
 def run_with_transaction(func, *args, **kw):
     pass
 
-[dispatch.generic(MultiorderGenericFunction)]
+
+@abstract()
 def restart_transaction(args):
     pass
 
+
+_using_sa = False
+
 def _use_sa(args=None):
-    # check to see if sqlalchemy has been imported and configured
-    return _engine is not None
+    return _using_sa
+
 
 # include "args" to avoid call being pre-cached
-[run_with_transaction.when("not _use_sa(args)")]
+@when(run_with_transaction, "not _use_sa(args)")
 def so_rwt(func, *args, **kw):
     log.debug("Starting SQLObject transaction")
     try:
@@ -378,12 +458,14 @@ def so_rwt(func, *args, **kw):
     finally:
         end_all()
 
+
 # include "args" to avoid call being pre-cached
-[restart_transaction.when("not _use_sa(args)")]
+@when(restart_transaction, "not _use_sa(args)")
 def so_restart_transaction(args):
-    #log.debug("ReStarting SQLObject transaction")
+    # log.debug("ReStarting SQLObject transaction")
     # Disable for now for compatibility
     pass
+
 
 def dispatch_exception(exception, args, kw):
     # errorhandling import here to avoid circular imports
@@ -392,26 +474,27 @@ def dispatch_exception(exception, args, kw):
     real_func, accept, allow_json, controller = args[:4]
     args = args[4:]
     exc_type, exc_value, exc_trace = sys.exc_info()
-    remove_keys(kw, ("tg_source", "tg_errors", "tg_exceptions"))
+    remove_keys(kw, ('tg_source', 'tg_errors', 'tg_exceptions'))
     try:
         output = dispatch_error(
             controller, real_func, None, exception, *args, **kw)
-    except dispatch.NoApplicableMethods:
+    except NoApplicableMethods:
         raise exc_type, exc_value, exc_trace
     else:
         del exc_trace
         return output
 
+
 # include "args" to avoid call being pre-cached
-[run_with_transaction.when("_use_sa(args)")]
+@when(run_with_transaction, "_use_sa(args)")
 def sa_rwt(func, *args, **kw):
     log.debug("Starting SA transaction")
-    request.sa_transaction = make_sa_transaction(session)
+    request.sa_transaction = session.begin()
     try:
         try:
             retval = func(*args, **kw)
         except (cherrypy.HTTPRedirect, cherrypy.InternalRedirect):
-            # If a redirect happens, commit and proceed with redirect
+            # If a redirect happens, commit and proceed with redirect.
             if sa_transaction_active():
                 log.debug('Redirect in active transaction - will commit now')
                 session.commit()
@@ -437,8 +520,9 @@ def sa_rwt(func, *args, **kw):
         session.close()
     return retval
 
+
 # include "args" to avoid call being pre-cached
-[restart_transaction.when("_use_sa(args)")]
+@when(restart_transaction, "_use_sa(args)")
 def sa_restart_transaction(args):
     log.debug("Restarting SA transaction")
     if sa_transaction_active():
@@ -447,15 +531,23 @@ def sa_restart_transaction(args):
     else:
         log.debug('Transaction is already inactive')
     session.close()
-    request.sa_transaction = make_sa_transaction(session)
+    request.sa_transaction = session.begin()
 
-def make_sa_transaction(session):
-    """Create a new transaction in an SA session."""
-    return session.begin(subtransactions=True)
 
 def sa_transaction_active():
     """Check whether SA transaction is still active."""
-    return session.is_active
+    try:
+        return session.is_active
+    except AttributeError: # SA < 0.4.9
+        try:
+            return session().is_active
+        except (TypeError, AttributeError): # SA < 0.4.7
+            try:
+                transaction = request.sa_transaction
+                return transaction and transaction.is_active
+            except AttributeError:
+                return False
+
 
 def so_to_dict(sqlobj):
     """Convert SQLObject to a dictionary based on columns."""
@@ -469,6 +561,7 @@ def so_to_dict(sqlobj):
         d.update(so_to_dict(sqlobj._parent))
         d.pop('childName')
     return d
+
 
 def so_columns(sqlclass, columns=None):
     """Return a dict with all columns from a SQLObject.
@@ -484,6 +577,7 @@ def so_columns(sqlclass, columns=None):
         so_columns(sqlclass.__base__, columns)
     return columns
 
+
 def so_joins(sqlclass, joins=None):
     """Return a list with all joins from a SQLObject.
 
@@ -497,13 +591,14 @@ def so_joins(sqlclass, joins=None):
         so_joins(sqlclass.__base__, joins)
     return joins
 
-class EndTransactionsFilter(BaseFilter):
-    def on_end_resource(self):
-        if _use_sa():
+
+def EndTransactions():
+    if _use_sa():
+        try:
             session.expunge_all()
+        except AttributeError: # SQLAlchemy < 0.5.1
+            session.clear()
+    else:
         end_all()
 
-__all__ = ["get_engine", "metadata", "session", "mapper",
-           "PackageHub", "AutoConnectHub", "set_db_uri",
-           "commit_all", "rollback_all", "end_all", "so_to_dict",
-           "so_columns", "so_joins", "EndTransactionsFilter"]
+
