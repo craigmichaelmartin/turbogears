@@ -55,48 +55,13 @@ if sqlalchemy:
         return orm_create_session()
 
     metadata = sqlalchemy.MetaData()
-    try:
-        from sqlalchemy.orm import scoped_session, mapper, sessionmaker
-        session_factory = sessionmaker(bind=_engine)
-        # Create session with autoflush=False
-        # and autocommit=True (transactional=False)
-        session = scoped_session(session_factory)
-        #mapper = session.mapper # use session-aware mapper
-    except ImportError: # SQLAlchemy < 0.4
-        from sqlalchemy.ext.sessioncontext import SessionContext
-        class Objectstore(object):
-            def __init__(self):
-                self.context = SessionContext(create_session)
-            def __getattr__(self, name):
-                return getattr(self.context.registry(), name)
-            session = property(lambda s: s.context.registry())
-        session = Objectstore()
-        context = session.context
-        Query = sqlalchemy.Query
-        from sqlalchemy.orm import mapper as orm_mapper
-        def mapper(cls, *args, **kwargs):
-            validate = kwargs.pop('validate', False)
-            if not hasattr(getattr(cls, '__init__'), 'im_func'):
-                def __init__(self, **kwargs):
-                     for key, value in kwargs.items():
-                         if validate and key not in self.mapper.props:
-                             raise KeyError(
-                                "Property does not exist: '%s'" % key)
-                         setattr(self, key, value)
-                cls.__init__ = __init__
-            m = orm_mapper(cls, extension=context.mapper_extension,
-                *args, **kwargs)
-            class query_property(object):
-                def __get__(self, instance, cls):
-                    return Query(cls, session=context.current)
-            cls.query = query_property()
-            return m
+    from sqlalchemy.orm import scoped_session, mapper, sessionmaker
+    session_factory = sessionmaker(bind=_engine)
+    # Create session with autoflush=False
+    # and autocommit=True (transactional=False)
+    session = scoped_session(session_factory)
+    #mapper = session.mapper # use session-aware mapper
 
-    try:
-        from sqlalchemy.ext import activemapper
-        activemapper.metadata, activemapper.objectstore = metadata, session
-    except ImportError:
-        pass
     try:
         import elixir
         elixir.metadata, elixir.session = metadata, session
@@ -113,11 +78,6 @@ else:
     metadata = session = mapper = None
 
 bind_meta_data = bind_metadata = get_engine # alias names
-
-try:
-    set
-except NameError: # Python 2.3
-    from sets import Set as set
 
 hub_registry = set()
 
@@ -414,10 +374,7 @@ def sa_rwt(func, *args, **kw):
             # If a redirect happens, commit and proceed with redirect
             if sa_transaction_active():
                 log.debug('Redirect in active transaction - will commit now')
-                if hasattr(session, 'commit'):
-                    session.commit()
-                else: # SA < 0.4
-                    request.sa_transaction.commit()
+                session.commit()
             else:
                 log.debug('Redirect in inactive transaction')
             raise
@@ -425,20 +382,14 @@ def sa_rwt(func, *args, **kw):
             # If any other exception happens, rollback and re-raise error
             if sa_transaction_active():
                 log.debug('Error in active transaction - will rollback now')
-                if hasattr(session, 'rollback'):
-                    session.rollback()
-                else: # SA < 0.4
-                    request.sa_transaction.rollback()
+                session.rollback()
             else:
                 log.debug('Error in inactive transaction')
             raise
         # If the call was successful, commit and proceed
         if sa_transaction_active():
             log.debug('Transaction is still active - will commit now')
-            try:
-                session.commit()
-            except AttributeError: # SA < 0.4
-                request.sa_transaction.commit()
+            session.commit()
         else:
             log.debug('Transaction is already inactive')
     finally:
@@ -452,38 +403,22 @@ def sa_restart_transaction(args):
     log.debug("Restarting SA transaction")
     if sa_transaction_active():
         log.debug('Transaction is still active - will rollback now')
-        try:
-            session.rollback()
-        except AttributeError: # SA < 0.4
-            request.sa_transaction.rollback()
+        session.rollback()
     else:
         log.debug('Transaction is already inactive')
     session.close()
     request.sa_transaction = make_sa_transaction(session)
 
+
 def make_sa_transaction(session):
     """Create a new transaction in an SA session."""
-    try:
-        return session
-    except AttributeError: # SA < 0.4
-        return session.create_transaction()
+    return session
+
 
 def sa_transaction_active():
     """Check whether SA transaction is still active."""
-    try:
-        return session.is_active
-    except AttributeError: # SA < 0.4.9
-        try:
-            return session().is_active
-        except (TypeError, AttributeError): # SA < 0.4.7
-            try:
-                transaction = request.sa_transaction
-            except AttributeError:
-                return False
-            try:
-                return transaction and transaction.is_active
-            except AttributeError: # SA < 0.4.3
-                return transaction.session.transaction
+    return session.is_active
+
 
 def so_to_dict(sqlobj):
     """Convert SQLObject to a dictionary based on columns."""
@@ -528,10 +463,7 @@ def so_joins(sqlclass, joins=None):
 class EndTransactionsFilter(BaseFilter):
     def on_end_resource(self):
         if _use_sa():
-            try:
-                session.expunge_all()
-            except AttributeError: # SQLAlchemy < 0.5.1
-                session.clear()
+            session.expunge_all()
         end_all()
 
 __all__ = ["get_engine", "metadata", "session", "mapper",
