@@ -30,52 +30,13 @@ log = logging.getLogger("turbogears.database")
 
 _engine = None
 
-# Provide support for SQLAlchemy
-if sqlalchemy:
-    def get_engine():
-        """Retrieve the engine based on the current configuration."""
-        global _engine
-        if not _engine:
-            alch_args = dict()
-            for k, v in config.config.configMap["global"].items():
-                if "sqlalchemy" in k:
-                    alch_args[k.split(".")[-1]] = v
-            dburi = alch_args.pop('dburi')
-            if not dburi:
-                raise KeyError("No sqlalchemy database config found!")
-            _engine = sqlalchemy.create_engine(dburi, **alch_args)
-        if not metadata.is_bound():
-            metadata.bind = _engine
-        return _engine
+def get_engine():
+    pass
 
-    def create_session():
-        """Create a session that uses the engine from thread-local metadata."""
-        if not metadata.is_bound():
-            get_engine()
-        return orm_create_session()
+def create_session():
+    pass
 
-    metadata = sqlalchemy.MetaData()
-    from sqlalchemy.orm import scoped_session, mapper, sessionmaker
-    session_factory = sessionmaker(bind=_engine)
-    # Create session with autoflush=False
-    # and autocommit=True (transactional=False)
-    session = scoped_session(session_factory)
-    #mapper = session.mapper # use session-aware mapper
-
-    try:
-        import elixir
-        elixir.metadata, elixir.session = metadata, session
-    except ImportError:
-        pass
-
-else:
-    def get_engine():
-        pass
-
-    def create_session():
-        pass
-
-    metadata = session = mapper = None
+metadata = session = mapper = None
 
 bind_meta_data = bind_metadata = get_engine # alias names
 
