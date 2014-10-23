@@ -328,8 +328,7 @@ class SimpleWSGIServer(CherryPyWSGIServer):
 
     def __init__(self):
         conf = cherrypy.config.get
-        wsgi_app = wsgiApp
-        wsgi_app = newrelic.agent.WSGIApplicationWrapper(wsgi_app)
+        wsgi_app = newrelic.agent.WSGIApplicationWrapper(wsgiApp)
         bind_addr = (conf('server.socket_host'), conf('server.socket_port'))
         CherryPyWSGIServer.__init__(self, bind_addr, wsgi_app,
             conf("server.thread_pool"), conf("server.socket_host"),
