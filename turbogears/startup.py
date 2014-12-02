@@ -7,6 +7,7 @@ import sys
 import time
 import atexit
 import signal
+import newrelic.agent
 
 import pkg_resources
 import cherrypy
@@ -327,27 +328,18 @@ class SimpleWSGIServer(CherryPyWSGIServer):
 
     def __init__(self):
         conf = cherrypy.config.get
-        wsgi_app = wsgiApp
-        if conf('server.environment') == 'development':
-            try:
-                from paste.evalexception.middleware import EvalException
-            except ImportError:
-                pass
-            else:
-                wsgi_app = EvalException(wsgi_app, global_conf={})
-                cherrypy.config.update({'server.throw_errors':True})
+        wsgi_app = newrelic.agent.WSGIApplicationWrapper(wsgiApp)
         bind_addr = (conf('server.socket_host'), conf('server.socket_port'))
-        CherryPyWSGIServer.__init__(self, bind_addr, wsgi_app,
+        super(SimpleWSGIServer, self).__init__(bind_addr, wsgi_app,
             conf("server.thread_pool"), conf("server.socket_host"),
-            request_queue_size = conf("server.socket_queue_size"))
+            request_queue_size=conf("server.socket_queue_size"),
+            timeout=conf('server.socket_timeout'),)
 
 
 def start_server(root):
     cherrypy.root = root
-    if config.get('tg.fancy_exception', False):
-        server.start(server=SimpleWSGIServer())
-    else:
-        server.start()
+    newrelic.agent.initialize()
+    server.start(server=SimpleWSGIServer())
 
 
 if startTurboGears not in server.on_start_server_list:
