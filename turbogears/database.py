@@ -71,6 +71,7 @@ if sqlobject:
             self.supports_transactions = supports_transactions
             hub_registry.add(self)
             ConnectionHub.__init__(self)
+            self._shards = [None, None, None, None]
 
         def _is_interesting_version(self):
             """Return True only if version of MySQLdb <= 1.0."""
@@ -98,25 +99,29 @@ if sqlobject:
                 connection.kw["conv"] = conversions
 
         def getConnection(self):
-            try:
-                conn = self.threadingLocal.connection
-                return self.begin(conn)
-            except AttributeError:
-                if self.uri:
-                    conn = sqlobject.connectionForURI(self.uri)
-                    # the following line effectively turns off the DBAPI connection
-                    # cache. We're already holding on to a connection per thread,
-                    # and the cache causes problems with sqlite.
-                    if self.uri.startswith("sqlite"):
-                        TheURIOpener.cachedURIs = {}
-                    elif self.uri.startswith("mysql") and \
-                         config.get("turbogears.enable_mysql41_timestamp_workaround", False):
-                        self._enable_timestamp_workaround(conn)
-                    self.threadingLocal.connection = conn
-                    return self.begin(conn)
-                raise AttributeError(
-                    "No connection has been defined for this thread "
-                    "or process")
+            from bazman import redis
+            shard_id = int(redis.get('shard_id'))
+            if self._shards[shard_id] is None:
+                try:
+                    conn = self.threadingLocal.connection
+                    self._shards[shard_id] = self.begin(conn)
+                except AttributeError:
+                    if self.uri:
+                        conn = sqlobject.connectionForURI(self.uri)
+                        # the following line effectively turns off the DBAPI connection
+                        # cache. We're already holding on to a connection per thread,
+                        # and the cache causes problems with sqlite.
+                        if self.uri.startswith("sqlite"):
+                            TheURIOpener.cachedURIs = {}
+                        elif self.uri.startswith("mysql") and \
+                            config.get("turbogears.enable_mysql41_timestamp_workaround", False):
+                            self._enable_timestamp_workaround(conn)
+                        self.threadingLocal.connection = conn
+                        self._shards[shard_id] = self.begin(conn)
+                    raise AttributeError(
+                        "No connection has been defined for this thread "
+                        "or process")
+            return self._shards[shard_id]
 
         def reset(self):
             """Used for testing purposes. This drops all of the connections
