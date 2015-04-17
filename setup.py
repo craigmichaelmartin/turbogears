@@ -23,6 +23,7 @@ install_requires = [
     "ConfigObj >= 4.3.2",
     "DecoratorTools >= 1.4",
     "FormEncode >= 0.7.1",
+    "newrelic >= 2.32",
     "PasteScript >= 1.6.2",
     #"RuleDispatch >= 0.5a0.dev-r2303",
     "setuptools >= 0.6c2",
