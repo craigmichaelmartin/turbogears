@@ -84,7 +84,7 @@ class SqlObjectVisitManager(BaseVisitManager):
                         {visit_class.q.expiry.fieldName: expiry},
                         where=(visit_class.q.visit_key==visit_key))
                     conn.query(conn.sqlrepr(u))
-                hub.commit()
+                    hub.commit()
             except:
                 hub.rollback()
                 raise
