@@ -596,6 +596,23 @@ def check_app_root():
     request.app_root = app_root
 
 
+def get_server_name(): 
+    """Return name of the server this application runs on. 
+ 
+    Respects 'Host' and 'X-Forwarded-Host' header. 
+ 
+    See the docstring of the 'absolute_url' function for more information. 
+ 
+    """ 
+    get = config.get 
+    h = request.headers 
+    host = get('tg.url_domain') or h.get('X-Forwarded-Host', h.get('Host')) 
+    if not host: 
+        host = '%s:%s' % (get('server.socket_host', 'localhost'), 
+            get('server.socket_port', 8080)) 
+    return host 
+
+
 def absolute_url(tgpath='/', params=None, **kw): 
     """Return absolute URL (including schema and host to this server). 
  
