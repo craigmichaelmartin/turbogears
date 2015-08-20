@@ -560,8 +560,7 @@ class Link(Resource):
 
     def update_params(self, d):
         super(Link, self).update_params(d)
-        d["link"] = "/%stg_widgets/%s/%s" % (startup.webpath,
-            self.mod, self.name)
+        d["link"] = "%s/%s" % (self.mod, self.name) if self.mod and self.name != 'widget' else "%s" % self.mod
 
     def __hash__(self):
         return hash(self.mod + self.name)
